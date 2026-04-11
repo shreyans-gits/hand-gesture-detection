@@ -1,4 +1,4 @@
-# gesture-lab 🖐️
+# hand-gesture-detection 🖐️
 
 A collection of hand gesture-controlled applications built using a custom MediaPipe-based hand tracking module. Interact with your computer using nothing but your hands.
 
