@@ -5,6 +5,7 @@ import os
 from mediapipe.tasks.python import vision
 from mediapipe.tasks.python import BaseOptions
 from mediapipe.tasks.python.vision import HandLandmarker, HandLandmarkerOptions
+from collections import deque
 
 THUMB = 0
 INDEX = 1
@@ -69,8 +70,11 @@ class Hand:
     def isFingerUp(self, fingerId):
         fingers = self.fingersUp()
         return fingers[fingerId] == 1
+    
+    def center(self):
+        xmin, ymin, xmax, ymax = self.bbox
+        return ((xmin + xmax) // 2, (ymin + ymax) // 2)
         
-
 
 class HandDetector:
     def __init__(self, maxHands=2, detectionCon=0.5, trackCon=0.5):
@@ -115,18 +119,56 @@ class HandDetector:
     def _drawHand(self, img, hand):
         # Draw landmarks
         for point in hand.points:
-            cv2.circle(img, point, 4, (255, 0, 255), cv2.FILLED)
+            cv2.circle(img, point, 4, (255, 255, 255), cv2.FILLED)
 
         # Draw connections between landmarks
         for connection in HAND_CONNECTIONS:
             p1 = hand.points[connection[0]]
             p2 = hand.points[connection[1]]
-            cv2.line(img, p1, p2, (255, 0, 255), 2)
+            cv2.line(img, p1, p2, (255, 255, 255), 2)
 
         # Draw bounding box
         xmin, ymin, xmax, ymax = hand.bbox
-        cv2.rectangle(img, (xmin - 20, ymin - 20), (xmax + 20, ymax + 20), (0, 255, 0), 2)
+        cv2.rectangle(img, (xmin - 20, ymin - 20), (xmax + 20, ymax + 20), (0, 0, 0), 2)
 
         # Draw handedness label
         cv2.putText(img, hand.handedness, (xmin - 20, ymin - 30),
-                    cv2.FONT_HERSHEY_PLAIN, 1.5, (0, 255, 0), 2)
+                    cv2.FONT_HERSHEY_PLAIN, 1.5, (0, 0, 0), 2)
+        
+
+class GestureTracker:
+    def __init__(self, historyLength=10, swipeThreshold=100):
+        self.history = deque(maxlen=historyLength)
+        self.swipeThreshold = swipeThreshold
+
+    def detectSwipe(self):
+        if len(self.history) < self.history.maxlen:
+            return None
+        
+        first = self.history[0]
+        last = self.history[-1]
+
+        xc1 = first[0]
+        xcl = last[0]
+        yc1 = first[1]
+        ycl = last[1]
+
+        if xcl - xc1 >= self.swipeThreshold:
+            return "RIGHT"
+        if xcl - xc1 >= -self.swipeThreshold:
+            return "LEFT"
+        if ycl - yc1 >= self.swipeThreshold:
+            return "DOWN"
+        if ycl - yc1 <= -self.swipeThreshold:
+            return "UP"
+        return None
+    
+    def update(self, hand):
+        if hand is not None:
+            self.history.append(hand.center())
+        else:
+            self.history.clear()
+
+    def isPinching(self, threshold=40):
+        length, _, _, _ = self.findDistance(4, 8)
+        return length < threshold
