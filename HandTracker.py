@@ -1,0 +1,132 @@
+import cv2
+import mediapipe as mp
+import math
+import os
+from mediapipe.tasks.python import vision
+from mediapipe.tasks.python import BaseOptions
+from mediapipe.tasks.python.vision import HandLandmarker, HandLandmarkerOptions
+
+THUMB = 0
+INDEX = 1
+MIDDLE = 2
+RING = 3
+PINKY = 4
+
+HAND_CONNECTIONS = [
+    (0,1),(1,2),(2,3),(3,4),
+    (0,5),(5,6),(6,7),(7,8),
+    (0,9),(9,10),(10,11),(11,12),
+    (0,13),(13,14),(14,15),(15,16),
+    (0,17),(17,18),(18,19),(19,20),
+    (5,9),(9,13),(13,17)
+]
+
+class Hand:
+    def __init__(self, landmarks, handedness, img_shape):
+        self.landmarks = landmarks
+        self.handedness = handedness
+        self.img_shape = img_shape
+
+        self.tipIds = [4,8,12,16,20]
+        self.points = []
+        self.bbox = ()
+        self._extractPoints()
+        self._extractBbox()
+
+    def _extractPoints(self):
+        h, w, c = self.img_shape
+        for lm in self.landmarks:
+            cx, cy = int(lm.x * w), int(lm.y * h)
+            self.points.append((cx, cy))
+
+    def _extractBbox(self):
+        xList = [p[0] for p in self.points]
+        yList = [p[1] for p in self.points]
+        xmin, xmax = min(xList), max(xList)
+        ymin, ymax = min(yList), max(yList)
+        self.bbox = (xmin, ymin, xmax, ymax)
+
+    def fingersUp(self):
+        fingers = []
+
+        if self.handedness == "Right":
+            fingers.append(1 if self.points[4][0] < self.points[3][0] else 0)
+        else:
+            fingers.append(1 if self.points[4][0] > self.points[3][0] else 0)
+
+        for tipId in self.tipIds[1:]:
+            fingers.append(1 if self.points[tipId][1] < self.points[tipId - 2][1] else 0)
+
+        return fingers
+    
+    def findDistance(self, p1, p2):
+        x1, y1 = self.points[p1]
+        x2, y2 = self.points[p2]
+        cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+        length = math.hypot(x2 - x1, y2 - y1)
+        return length, (x1, y1), (x2, y2), (cx, cy)
+    
+    def isFingerUp(self, fingerId):
+        fingers = self.fingersUp()
+        return fingers[fingerId] == 1
+        
+
+
+class HandDetector:
+    def __init__(self, maxHands=2, detectionCon=0.5, trackCon=0.5):
+        self.maxHands = maxHands
+        self.detectionCon = detectionCon
+        self.trackCon = trackCon
+
+        model_path = os.path.join(os.path.dirname(__file__), "hand_landmarker.task")
+
+        options = HandLandmarkerOptions(
+            base_options=BaseOptions(model_asset_path=model_path),
+            num_hands=maxHands,
+            min_hand_detection_confidence=detectionCon,
+            min_tracking_confidence=trackCon,
+            running_mode=vision.RunningMode.VIDEO
+        )
+
+        self.detector = HandLandmarker.create_from_options(options)
+
+    def findHands(self, img, draw=True, flip=False):
+        imgRGB = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=imgRGB)
+
+        timestamp = int(cv2.getTickCount() / cv2.getTickFrequency() * 1000)
+        results = self.detector.detect_for_video(mp_image, timestamp)
+
+        hands = []
+
+        if results.hand_landmarks:
+            for i, handLms in enumerate(results.hand_landmarks):
+                handedness = results.handedness[i][0].display_name
+                if flip:
+                    handedness = "Left" if handedness == "Right" else "Right"
+                hand = Hand(handLms, handedness, img.shape)
+                hands.append(hand)
+
+                if draw:
+                    self._drawHand(img, hand)
+
+        return hands, img
+    
+    def _drawHand(self, img, hand):
+        # Draw landmarks
+        for point in hand.points:
+            cv2.circle(img, point, 4, (255, 0, 255), cv2.FILLED)
+
+        # Draw connections between landmarks
+        for connection in HAND_CONNECTIONS:
+            p1 = hand.points[connection[0]]
+            p2 = hand.points[connection[1]]
+            cv2.line(img, p1, p2, (255, 0, 255), 2)
+
+        # Draw bounding box
+        xmin, ymin, xmax, ymax = hand.bbox
+        cv2.rectangle(img, (xmin - 20, ymin - 20), (xmax + 20, ymax + 20), (0, 255, 0), 2)
+
+        # Draw handedness label
+        cv2.putText(img, hand.handedness, (xmin - 20, ymin - 30),
+                    cv2.FONT_HERSHEY_PLAIN, 1.5, (0, 255, 0), 2)
