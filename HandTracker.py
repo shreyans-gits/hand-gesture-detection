@@ -6,6 +6,7 @@ from mediapipe.tasks.python import vision
 from mediapipe.tasks.python import BaseOptions
 from mediapipe.tasks.python.vision import HandLandmarker, HandLandmarkerOptions
 from collections import deque
+import time
 
 THUMB = 0
 INDEX = 1
@@ -33,6 +34,11 @@ class Hand:
         self.bbox = ()
         self._extractPoints()
         self._extractBbox()
+
+        self.hoverStart = None
+        self.hoverPos = None
+        self.hoverThreshold = 40
+        self.hoverTime = 2
 
     def _extractPoints(self):
         h, w, c = self.img_shape
@@ -140,27 +146,34 @@ class GestureTracker:
     def __init__(self, historyLength=10, swipeThreshold=100):
         self.history = deque(maxlen=historyLength)
         self.swipeThreshold = swipeThreshold
+        self.hoverStart = None
+        self.hoverPos = None
+        self.hoverThreshold = 40
 
-    def detectSwipe(self):
+    def detectSwipe(self, imgShape):
         if len(self.history) < self.history.maxlen:
             return None
-        
+        h, w, c = imgShape
+        center = self.history[-1]
         first = self.history[0]
         last = self.history[-1]
+
 
         xc1 = first[0]
         xcl = last[0]
         yc1 = first[1]
         ycl = last[1]
 
-        if xcl - xc1 >= self.swipeThreshold:
-            return "RIGHT"
-        if xcl - xc1 >= -self.swipeThreshold:
-            return "LEFT"
-        if ycl - yc1 >= self.swipeThreshold:
-            return "DOWN"
-        if ycl - yc1 <= -self.swipeThreshold:
-            return "UP"
+        if center[0] > w * 0.7:
+            if xcl - xc1 >= self.swipeThreshold:
+                return "RIGHT"
+            if xcl - xc1 <= -self.swipeThreshold:
+                return "LEFT"
+        if center[1] < h * 0.3:
+            if ycl - yc1 >= self.swipeThreshold:
+                return "DOWN"
+            if ycl - yc1 <= -self.swipeThreshold:
+                return "UP"
         return None
     
     def update(self, hand):
@@ -172,3 +185,24 @@ class GestureTracker:
     def isPinching(self, threshold=40):
         length, _, _, _ = self.findDistance(4, 8)
         return length < threshold
+    
+    def detectHover(self, hand):
+        if hand is None:
+            self.hoverStart = None
+            self.hoverPos = None
+            return False
+        centre = hand.center()
+        if self.hoverPos == None:
+            self.hoverPos =  centre
+            self.hoverStart = time.time()
+            return False   
+        else:
+            distance = math.hypot(centre[0] - self.hoverPos[0], centre[1] - self.hoverPos[1])
+            if distance < self.hoverThreshold:
+                if time.time() - self.hoverStart >= 2:
+                    return True
+            else:
+                self.hoverPos = None
+                self.hoverStart = time.time()
+                return False
+        return False
