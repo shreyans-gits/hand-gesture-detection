@@ -80,6 +80,16 @@ class Hand:
     def center(self):
         xmin, ymin, xmax, ymax = self.bbox
         return ((xmin + xmax) // 2, (ymin + ymax) // 2)
+    
+    def selectionCursor(self):
+        fingers = self.fingersUp()
+        if fingers[INDEX] == 1 and fingers[MIDDLE] == 1:
+            x1, y1 = self.points[8]   # index tip
+            x2, y2 = self.points[12]  # middle tip
+            cx = (x1 + x2) // 2
+            cy = (y1 + y2) // 2
+            return (cx, cy)
+        return None
         
 
 class HandDetector:

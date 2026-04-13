@@ -9,6 +9,8 @@ SCREEN_W, SCREEN_H = 1280, 720
 FONT_PATH = "GUI/open_sans.ttf"
 notification = ""
 notificationTimer = 0
+subPanelOpen = False
+hoveredSubBtn = -1
 
 # Mode management
 modes = ["Whiteboard", "Air Mouse", "3D Shapes"]
@@ -37,6 +39,23 @@ panelImgs = [
 
 # Scale down from 2x to 1x
 panelImgs = [cv2.resize(img, (PANEL_W, SCREEN_H)) for img in panelImgs]
+
+#SUB GUI
+subPanelImgs = [
+    [cv2.resize(cv2.imread(f"GUI/Wpanel{i}.png"), (960, 240)) for i in range(5)],
+    [],
+    [cv2.resize(cv2.imread(f"GUI/Dpanel{i}.png"), (960, 240)) for i in range(3)]
+]
+
+subButtonRects = [
+    [(28,50,180,203),(212,50,364,203),(396,50,548,203),(580,50,732,203),(764,50,916,203)],
+    [],
+    [(59,39,250,230),(385,39,576,230),(711,39,902,230)]
+]
+
+subPanelOpen = False
+currentSubOption = 0
+subPanelY = -240  # starts hidden above screen
 
 # Initialize
 cap = cv2.VideoCapture(0)
@@ -93,6 +112,19 @@ def getButtonRects(modes):
         buttons.append((btnX, btnY, SCREEN_W - 10, btnY + BUTTON_H))
     return buttons
 
+def drawSubPanel(img, subPanelOpen, currentMode, currentSubOption, subPanelImgs, hoveredSubBtn=-1):
+    if not subPanelOpen or not subPanelImgs[currentMode]:
+        return img
+    
+    panelImg = subPanelImgs[currentMode][currentSubOption]
+    x_start = (SCREEN_W - 960) // 2
+    
+    overlay = img.copy()
+    overlay[0:240, x_start:x_start+960] = panelImg
+    cv2.addWeighted(overlay, 0.75, img, 0.25, 0, img)
+    
+    return img
+
 hoverTracker = GestureTracker()
 buttons = getButtonRects(modes)
 while True:
@@ -121,34 +153,43 @@ while True:
             panelOpen = True
         if swipe == "RIGHT":
             panelOpen = False
+        if swipe == "DOWN":
+            if subPanelImgs[currentMode]:
+                subPanelOpen = True
+        if swipe == "UP":
+            subPanelOpen = False
     else:
         gestureTrackerR.update(None)
 
     hoveredBtn = -1
     if panelOpen and rightHand:
-        cx, cy = rightHand.center()
-        cv2.circle(img, (cx, cy), 10, (0, 255, 255), cv2.FILLED)
-        
-        hovering = False
-        for i, (x1, y1, x2, y2) in enumerate(buttons):
-            print(f"cx:{cx} cy:{cy} | btn{i}: {x1},{y1},{x2},{y2}")
-            if x1 < cx < x2 and y1 < cy < y2:
-                hoveredBtn = i
-                hovering = True
-                result = hoverTracker.detectHover(rightHand)
-                if result:
-                    currentMode = i
-                    panelOpen = False
-                    notification = f"Selected: {modes[i]}"
-                    notificationTimer = time.time()
-                break
-        # print(f"hovering: {hovering}")
-        if not hovering:
+        cursor = rightHand.selectionCursor()
+        if cursor:
+            cx, cy = cursor
+            cv2.circle(img, (cx, cy), 10, (0, 255, 255), cv2.FILLED)
+            
+            hovering = False
+            for i, (x1, y1, x2, y2) in enumerate(buttons):
+                if x1 < cx < x2 and y1 < cy < y2:
+                    hoveredBtn = i
+                    hovering = True
+                    result = hoverTracker.detectHover(rightHand)
+                    if result:
+                        currentMode = i
+                        panelOpen = False
+                        notification = f"Selected: {modes[i]}"
+                        notificationTimer = time.time()
+                    break
+            
+            if not hovering:
+                hoverTracker.detectHover(None)
+        else:
             hoverTracker.detectHover(None)
     img = drawPanel(img, panelOpen, currentMode, modes, panelImgs, hoveredBtn)
 
     if notification and time.time() - notificationTimer < 1.5:
         img = drawText(img, notification, (SCREEN_W // 2, 30), FONT_PATH, 36)
+    img = drawSubPanel(img, subPanelOpen, currentMode, currentSubOption, subPanelImgs)
     cv2.imshow("Gesture Lab", img)
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
