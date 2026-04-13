@@ -1,8 +1,14 @@
 import cv2
 from HandTracker import HandDetector, GestureTracker, THUMB, INDEX, MIDDLE, RING, PINKY
+from PIL import ImageFont, ImageDraw, Image
+import numpy as np
+import time
 
 # Screen and app state
 SCREEN_W, SCREEN_H = 1280, 720
+FONT_PATH = "GUI/open_sans.ttf"
+notification = ""
+notificationTimer = 0
 
 # Mode management
 modes = ["Whiteboard", "Air Mouse", "3D Shapes"]
@@ -22,6 +28,16 @@ BUTTON_PADDING = 40
 panelOpen = False
 panelX = SCREEN_W - PANEL_TAB_W  # starts as just the tab
 
+#GUI 
+panelImgs = [
+    cv2.imread("GUI/panel0.png"),
+    cv2.imread("GUI/panel1.png"),
+    cv2.imread("GUI/panel2.png")
+]
+
+# Scale down from 2x to 1x
+panelImgs = [cv2.resize(img, (PANEL_W, SCREEN_H)) for img in panelImgs]
+
 # Initialize
 cap = cv2.VideoCapture(0)
 cap.set(cv2.CAP_PROP_FRAME_WIDTH, SCREEN_W)
@@ -34,35 +50,29 @@ detector = HandDetector(maxHands=2)
 gestureTrackerR = GestureTracker()
 gestureTrackerL = GestureTracker()
 
-def drawPanel(img, panelOpen, currentMode, modes, hoveredBtn=-1):
+def drawText(img, text, pos, fontPath, fontSize, color=(255, 255, 255)):
+    imgPil = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+    draw = ImageDraw.Draw(imgPil)
+    font = ImageFont.truetype(fontPath, fontSize)
+    
+    # Calculate text width for centering
+    bbox = draw.textbbox((0, 0), text, font=font)
+    textW = bbox[2] - bbox[0]
+    x = pos[0] - textW // 2
+    y = pos[1]
+    
+    draw.text((x, y), text, font=font, fill=(color[2], color[1], color[0]))
+    return cv2.cvtColor(np.array(imgPil), cv2.COLOR_RGB2BGR)
+
+def drawPanel(img, panelOpen, currentMode, modes, panelImgs, hoveredBtn=-1):
     h, w = SCREEN_H, SCREEN_W
     buttons = []
     if panelOpen:
         panelX = w - PANEL_W
-        # Draw panel background
+        panelImg = panelImgs[currentMode]
         overlay = img.copy()
-        cv2.rectangle(overlay, (panelX, 0), (w, h), (30, 30, 30), -1)
-        cv2.addWeighted(overlay, 0.7, img, 0.3, 0, img)
-
-        # Draw mode buttons
-        buttons = []
-        for i, mode in enumerate(modes):
-            totalHeight = len(modes) * BUTTON_H + (len(modes) - 1) * BUTTON_PADDING
-            startY = (SCREEN_H - totalHeight) // 2
-            btnY = startY + i * (BUTTON_H + BUTTON_PADDING)
-            btnX = SCREEN_W - PANEL_W + 10
-            buttons.append((btnX, btnY, SCREEN_W - 10, btnY + BUTTON_H))
-
-            # Highlight current mode
-            if i == currentMode:
-                color = (0, 255, 150)
-            elif i == hoveredBtn:
-                color = (0, 165, 255)  # orange for hover
-            else:
-                color = (100, 100, 100)
-            cv2.rectangle(img, (btnX, btnY), (w - 10, btnY + BUTTON_H), color, -1)
-            cv2.putText(img, mode, (btnX + 10, btnY + 50),
-                        cv2.FONT_HERSHEY_PLAIN, 1.2, (255, 255, 255), 2)
+        overlay[0:h, panelX:panelX + PANEL_W] = panelImg
+        cv2.addWeighted(overlay, 0.90, img, 0.10, 0, img)
     else:
         # Draw tab
         overlay = img.copy()
@@ -71,7 +81,7 @@ def drawPanel(img, panelOpen, currentMode, modes, hoveredBtn=-1):
         cv2.putText(img, "<", (w - PANEL_TAB_W + 2, h//2),
                     cv2.FONT_HERSHEY_PLAIN, 2, (255, 255, 255), 2)
 
-    return img, buttons
+    return img
 
 def getButtonRects(modes):
     buttons = []
@@ -121,6 +131,7 @@ while True:
         
         hovering = False
         for i, (x1, y1, x2, y2) in enumerate(buttons):
+            print(f"cx:{cx} cy:{cy} | btn{i}: {x1},{y1},{x2},{y2}")
             if x1 < cx < x2 and y1 < cy < y2:
                 hoveredBtn = i
                 hovering = True
@@ -128,15 +139,20 @@ while True:
                 if result:
                     currentMode = i
                     panelOpen = False
+                    notification = f"Selected: {modes[i]}"
+                    notificationTimer = time.time()
                 break
         # print(f"hovering: {hovering}")
         if not hovering:
             hoverTracker.detectHover(None)
-    img,buttons = drawPanel(img, panelOpen, currentMode, modes, hoveredBtn)
+    img = drawPanel(img, panelOpen, currentMode, modes, panelImgs, hoveredBtn)
 
+    if notification and time.time() - notificationTimer < 1.5:
+        img = drawText(img, notification, (SCREEN_W // 2, 30), FONT_PATH, 36)
     cv2.imshow("Gesture Lab", img)
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
 cap.release()
 cv2.destroyAllWindows()
+detector.detector.close()
