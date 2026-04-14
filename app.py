@@ -3,25 +3,27 @@ from HandTracker import HandDetector, GestureTracker, THUMB, INDEX, MIDDLE, RING
 from PIL import ImageFont, ImageDraw, Image
 import numpy as np
 import time
+from whiteboard import Whiteboard
 
 # Screen and app state
 SCREEN_W, SCREEN_H = 1280, 720
 FONT_PATH = "GUI/open_sans.ttf"
 notification = ""
 notificationTimer = 0
-subPanelOpen = False
+# subPanelOpen = False
 hoveredSubBtn = -1
+whiteboard = Whiteboard(SCREEN_W, SCREEN_H)
 
 # Mode management
 modes = ["Whiteboard", "Air Mouse", "3D Shapes"]
 subOptions = {
     "Whiteboard": ["Red", "Green", "Blue", "Yellow", "White", "Eraser"],
     "Air Mouse": [],
-    "3D Shapes": ["Sphere", "Cube"]
+    "3D Shapes": ["Cube", "Sphere", "Import"]
 }
 
 currentMode = 0
-currentSubOption = 0
+# currentSubOption = 0
 PANEL_W = 160
 PANEL_TAB_W = 20
 BUTTON_H = 85
@@ -66,8 +68,9 @@ SCREEN_H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
 detector = HandDetector(maxHands=2)
 
-gestureTrackerR = GestureTracker()
+gestureTrackerR = GestureTracker(swipeThreshold=100)   # handles LEFT/RIGHT
 gestureTrackerL = GestureTracker()
+subHoverTracker = GestureTracker()
 
 def drawText(img, text, pos, fontPath, fontSize, color=(255, 255, 255)):
     imgPil = Image.fromarray(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
@@ -149,7 +152,7 @@ while True:
 
     if rightHand:
         swipe = gestureTrackerR.detectSwipe(img.shape)
-        if swipe == "LEFT":
+        if swipe == "LEFT" and leftHand and leftHand.isFingerUp(INDEX) and leftHand.isFingerUp(MIDDLE):
             panelOpen = True
         if swipe == "RIGHT":
             panelOpen = False
@@ -185,11 +188,41 @@ while True:
                 hoverTracker.detectHover(None)
         else:
             hoverTracker.detectHover(None)
+    
+    hoveredSubBtn = -1
+    if subPanelOpen and rightHand and subButtonRects[currentMode]:
+        cursor = rightHand.selectionCursor()
+        if cursor:
+            cx, cy = cursor
+            
+            # offset cursor by panel x start position
+            panelStartX = (SCREEN_W - 960) // 2
+            
+            hovering = False
+            for i, (x1, y1, x2, y2) in enumerate(subButtonRects[currentMode]):
+                # shift button rects by panel x offset
+                if (x1 + panelStartX) < cx < (x2 + panelStartX) and y1 < cy < y2:
+                    hoveredSubBtn = i
+                    hovering = True
+                    if subHoverTracker.detectHover(rightHand):
+                        currentSubOption = i
+                        subPanelOpen = False
+                        notification = f"Selected: {subOptions[modes[currentMode]][i]}"
+                        notificationTimer = time.time()
+                    break
+            
+            if not hovering:
+                subHoverTracker.detectHover(None)
+        else:
+            subHoverTracker.detectHover(None)
+
     img = drawPanel(img, panelOpen, currentMode, modes, panelImgs, hoveredBtn)
 
     if notification and time.time() - notificationTimer < 1.5:
         img = drawText(img, notification, (SCREEN_W // 2, 30), FONT_PATH, 36)
     img = drawSubPanel(img, subPanelOpen, currentMode, currentSubOption, subPanelImgs)
+    if currentMode == 0:
+        img = whiteboard.update(img, rightHand, leftHand, currentSubOption)
     cv2.imshow("Gesture Lab", img)
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
