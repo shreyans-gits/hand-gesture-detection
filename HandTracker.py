@@ -90,6 +90,10 @@ class Hand:
             cy = (y1 + y2) // 2
             return (cx, cy)
         return None
+    
+    def isPinching(self, threshold=40):
+        length, _, _, _ = self.findDistance(4, 8)
+        return length < threshold
         
 
 class HandDetector:
@@ -191,10 +195,6 @@ class GestureTracker:
             self.history.append(hand.center())
         else:
             self.history.clear()
-
-    def isPinching(self, threshold=40):
-        length, _, _, _ = self.findDistance(4, 8)
-        return length < threshold
     
     def detectHover(self, hand):
         if hand is None:

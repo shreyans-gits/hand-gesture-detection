@@ -4,6 +4,7 @@ from PIL import ImageFont, ImageDraw, Image
 import numpy as np
 import time
 from whiteboard import Whiteboard
+from airmouse import AirMouse
 
 # Screen and app state
 SCREEN_W, SCREEN_H = 1280, 720
@@ -13,6 +14,7 @@ notificationTimer = 0
 # subPanelOpen = False
 hoveredSubBtn = -1
 whiteboard = Whiteboard(SCREEN_W, SCREEN_H)
+airmouse = AirMouse(SCREEN_W, SCREEN_H)
 
 # Mode management
 modes = ["Whiteboard", "Air Mouse", "3D Shapes"]
@@ -65,6 +67,7 @@ cap.set(cv2.CAP_PROP_FRAME_WIDTH, SCREEN_W)
 cap.set(cv2.CAP_PROP_FRAME_HEIGHT, SCREEN_H)
 SCREEN_W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
 SCREEN_H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+print(f"Camera resolution: {SCREEN_W}x{SCREEN_H}")
 
 detector = HandDetector(maxHands=2)
 
@@ -128,6 +131,8 @@ def drawSubPanel(img, subPanelOpen, currentMode, currentSubOption, subPanelImgs,
     
     return img
 
+cv2.namedWindow("Gesture Lab", cv2.WINDOW_NORMAL)
+cv2.setWindowProperty("Gesture Lab", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
 hoverTracker = GestureTracker()
 buttons = getButtonRects(modes)
 while True:
@@ -154,7 +159,7 @@ while True:
         swipe = gestureTrackerR.detectSwipe(img.shape)
         if swipe == "LEFT" and leftHand and leftHand.isFingerUp(INDEX) and leftHand.isFingerUp(MIDDLE):
             panelOpen = True
-        if swipe == "RIGHT":
+        if swipe == "RIGHT" and leftHand and leftHand.isFingerUp(INDEX) and leftHand.isFingerUp(MIDDLE):
             panelOpen = False
         if swipe == "DOWN":
             if subPanelImgs[currentMode]:
@@ -223,6 +228,9 @@ while True:
     img = drawSubPanel(img, subPanelOpen, currentMode, currentSubOption, subPanelImgs)
     if currentMode == 0:
         img = whiteboard.update(img, rightHand, leftHand, currentSubOption)
+    elif currentMode == 1:
+        airmouse.update(img, rightHand)
+
     cv2.imshow("Gesture Lab", img)
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
