@@ -15,7 +15,7 @@ class Shapes3D:
 
         self.angleX = 0
         self.angleY = 0
-        self.scale = 10
+        self.scale = 50
 
         self.centerX = screenW // 2
         self.centerY = screenH // 2

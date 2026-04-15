@@ -5,6 +5,7 @@ import numpy as np
 import time
 from whiteboard import Whiteboard
 from airmouse import AirMouse
+from shapes3d import Shapes3D
 
 # Screen and app state
 SCREEN_W, SCREEN_H = 1280, 720
@@ -15,6 +16,7 @@ notificationTimer = 0
 hoveredSubBtn = -1
 whiteboard = Whiteboard(SCREEN_W, SCREEN_H)
 airmouse = AirMouse(SCREEN_W, SCREEN_H)
+shapes3d = Shapes3D(SCREEN_W, SCREEN_H)
 
 # Mode management
 modes = ["Whiteboard", "Air Mouse", "3D Shapes"]
@@ -230,6 +232,8 @@ while True:
         img = whiteboard.update(img, rightHand, leftHand, currentSubOption)
     elif currentMode == 1:
         airmouse.update(img, rightHand)
+    elif currentMode == 2:
+        img = shapes3d.update(img, rightHand, leftHand, currentSubOption)
 
     cv2.imshow("Gesture Lab", img)
     if cv2.waitKey(1) & 0xFF == ord('q'):
