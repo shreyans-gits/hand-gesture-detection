@@ -22,6 +22,7 @@ class Shapes3D:
 
         self.prevHandPos = None
         self.prevDist = None
+        self.currentSubOption = -1
 
     def loadModel(self, filepath):
         with open(filepath, 'r') as f:
@@ -118,6 +119,15 @@ class Shapes3D:
         return (x,y)
 
     def update(self, img, rightHand, leftHand, currentSubOption):
+        if currentSubOption != self.currentSubOption:
+            self.vertices = []
+            self.edges = []
+            self.angleX = 0
+            self.angleY = 0
+            self.scale = 50
+            self.centerX = self.screenW // 2
+            self.centerY = self.screenH // 2
+            self.currentSubOption = currentSubOption
 
         if currentSubOption == 0 and not self.vertices:
             self.vertices = [
@@ -129,6 +139,38 @@ class Shapes3D:
                 (4,5),(5,7),(7,6),(6,4),
                 (0,4),(1,5),(2,6),(3,7)
             ]
+
+        if currentSubOption == 1 and not self.vertices:
+            self.vertices = []
+            self.edges = []
+
+            radius = 1
+            stacks = 12   # vertical divisions
+            slices = 24   # horizontal divisions
+
+            for i in range(stacks + 1):
+                theta = np.pi * i / stacks
+
+                for j in range(slices):
+                    phi = 2 * np.pi * j / slices
+
+                    x = radius * np.sin(theta) * np.cos(phi)
+                    y = radius * np.cos(theta)
+                    z = radius * np.sin(theta) * np.sin(phi)
+
+                    self.vertices.append((x, y, z))
+
+            for i in range(stacks + 1):
+                for j in range(slices):
+
+                    current = i * slices + j
+                    next_slice = i * slices + (j + 1) % slices
+
+                    self.edges.append((current, next_slice))
+
+                    if i < stacks:
+                        next_stack = (i + 1) * slices + j
+                        self.edges.append((current, next_stack))
 
         if rightHand and rightHand.isFingerUp(INDEX) and sum(rightHand.fingersUp()) == 1:
             cx, cy = rightHand.center()
