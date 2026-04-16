@@ -3,6 +3,7 @@ import numpy as np
 import json
 import math
 from HandTracker import INDEX
+from tkinter import Tk, filedialog
 
 class Shapes3D:
     def __init__(self, screenW, screenH):
@@ -117,6 +118,18 @@ class Shapes3D:
         y = int(-p[1] + self.centerY)
 
         return (x,y)
+    
+    def openFileDialog(self):
+        root = Tk()
+        root.withdraw()  # hides empty tkinter window
+
+        filepath = filedialog.askopenfilename(
+            title="Select Blockbench JSON Model",
+            filetypes=[("JSON files", "*.json")]
+        )
+
+        root.destroy()
+        return filepath
 
     def update(self, img, rightHand, leftHand, currentSubOption):
         if currentSubOption != self.currentSubOption:
@@ -171,6 +184,13 @@ class Shapes3D:
                     if i < stacks:
                         next_stack = (i + 1) * slices + j
                         self.edges.append((current, next_stack))
+        
+        if currentSubOption == 2 and not self.vertices:
+            filepath = self.openFileDialog()
+
+            if filepath:
+                self.loadModel(filepath)
+                self.scale = 20   # optional: make visible immediately
 
         if rightHand and rightHand.isFingerUp(INDEX) and sum(rightHand.fingersUp()) == 1:
             cx, cy = rightHand.center()
