@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 import json
 import math
-from HandTracker import INDEX
+from HandTracker import INDEX, GestureTracker
 from tkinter import Tk, filedialog
 
 class Shapes3D:
@@ -192,7 +192,7 @@ class Shapes3D:
                 self.loadModel(filepath)
                 self.scale = 20   # optional: make visible immediately
 
-        if rightHand and rightHand.isFingerUp(INDEX) and sum(rightHand.fingersUp()) == 1:
+        if rightHand and rightHand.isFingerUp(INDEX) and sum(rightHand.fingersUp()) == 1 and not rightHand.isPinching():
             cx, cy = rightHand.center()
 
             if self.prevHandPos:
@@ -206,7 +206,19 @@ class Shapes3D:
         else:
             self.prevHandPos = None
 
-        if rightHand and leftHand:
+        if rightHand and rightHand.isPinching():
+            cx, cy = rightHand.center()
+
+            if self.prevMovePos:
+                dx = cx - self.prevMovePos[0]
+                dy = cy - self.prevMovePos[1]
+
+                self.centerX += dx * 0.8
+                self.centerY += dy * 0.8
+
+            self.prevMovePos = (cx, cy)
+
+        elif rightHand and leftHand:
             cx1, cy1 = rightHand.center()
             cx2, cy2 = leftHand.center()
 
@@ -219,15 +231,9 @@ class Shapes3D:
 
             self.prevDist = dist
 
-            # translation
-            midX = (cx1 + cx2)//2
-            midY = (cy1 + cy2)//2
-
-            self.centerX = midX
-            self.centerY = midY
-
         else:
             self.prevDist = None
+            self.prevMovePos = None
 
         for edge in self.edges:
             p1 = self.project(self.vertices[edge[0]])
