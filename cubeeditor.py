@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import math
-from HandTracker import INDEX
+from HandTracker import INDEX, THUMB, MIDDLE, PINKY, RING
 
 class CubeEditor:
     def __init__(self, screenW, screenH):
@@ -25,6 +25,8 @@ class CubeEditor:
 
         self.prevHandPos = None
         self.prevDist = None
+
+        self.selectedCube = None
 
     def getRotationX(self, angle):
         return np.array([
@@ -71,8 +73,27 @@ class CubeEditor:
             for edge in edges:
                 p1 = projected[edge[0]]
                 p2 = projected[edge[1]]
-                cv2.line(img, p1, p2, (255,255,255), 2)
+                color = (255, 255, 255)
+                if cube == self.selectedCube:
+                    color = (0, 255, 0)  # green highlight
+
+                if cube in self.tempCubes:
+                    color = (0, 0, 255)  # red preview
+
+                cv2.line(img, p1, p2, color, 2)
         return img
+    
+    def projectPoint(self, point):
+        Rx = self.getRotationX(self.angleX)
+        Ry = self.getRotationY(self.angleY)
+
+        p = np.array(point)
+        p = Ry @ (Rx @ p)
+
+        px = int(p[0] * self.scale + self.centerX)
+        py = int(-p[1] * self.scale + self.centerY)
+
+        return (px, py)
 
     def update(self, img, rightHand, leftHand):
         if self.state == "IDLE":
@@ -86,6 +107,36 @@ class CubeEditor:
                 self.anchorHand = "Left"
                 self.state = "PLACED"
 
+        cursor = None
+        if rightHand:
+            cursor = rightHand.selectionCursor()
+
+        if cursor and self.state == "PLACED" and len(self.cubes) > 0:
+            minDist = float("inf")
+            closestCube = None
+
+            for cube in self.cubes:
+                gx, gy, gz = cube
+
+                # cube center (important!)
+                cx = gx + 0.5
+                cy = gy + 0.5
+                cz = gz + 0.5
+
+                px, py = self.projectPoint((cx, cy, cz))
+
+                dist = math.hypot(cursor[0] - px, cursor[1] - py)
+
+                if dist < minDist:
+                    minDist = dist
+                    closestCube = cube
+
+            # selection threshold
+            if minDist < 50:
+                self.selectedCube = closestCube
+        
+
+
         if (
             self.state == "PLACED"
             and rightHand is not None
@@ -94,7 +145,10 @@ class CubeEditor:
             and leftHand.isPinching()
         ):
             self.state = "EXTENDING"
-            self.extendBase = self.cubes[-1]
+            if self.selectedCube:
+                self.extendBase = self.selectedCube
+            else:
+                self.extendBase = self.cubes[-1]
             self.tempCubes = []
 
             # decide extender
@@ -103,18 +157,70 @@ class CubeEditor:
             else:
                 extender = rightHand
 
-            print("Right:", rightHand)
-            print("Left:", leftHand)
-            print("Anchor:", self.anchorHand)
-            
-            # SAFETY CHECK
             if extender is not None:
                 self.baseExtendPos = extender.center()
                 print("Entered EXTENDING")
             else:
                 print("Extender is None (skipping)")
 
-        if rightHand and rightHand.isFingerUp(INDEX) and not rightHand.isPinching() and self.state == "PLACED":
+        if self.state == "EXTENDING":
+            if self.anchorHand == "Right" and leftHand is not None:
+                extender = leftHand
+            elif self.anchorHand == "Left" and rightHand is not None:
+                extender = rightHand
+            else:
+                return img
+
+            cx, cy = extender.center()
+            bx, by = self.baseExtendPos
+            
+            dx = cx - bx
+            dy = cy - by
+
+            deadzone = 15  # pixels
+
+            if self.extendAxis is None:
+                if abs(dx) < deadzone and abs(dy) < deadzone:
+                    return img  # ignore tiny movement
+
+                if abs(dx) > abs(dy):
+                    self.extendAxis = "X"
+                    self.extendDir = 1 if dx > 0 else -1
+                else:
+                    self.extendAxis = "Y"
+                    self.extendDir = -1 if dy > 0 else 1
+
+            print("dx:", dx, "dy:", dy, "axis:", self.extendAxis)
+
+            threshold = 30
+            if self.extendAxis == "X":
+                distance = abs(dx)
+            else:
+                distance = abs(dy)
+            count = max(0, int(distance / threshold))
+
+            self.tempCubes = []
+            gx, gy, gz = self.extendBase
+
+            for i in range(1, count + 1):
+                if self.extendAxis == "X":
+                    newCube = (gx + i * self.extendDir, gy, gz)
+                else:
+                    newCube = (gx, gy + i * self.extendDir, gz)
+
+                self.tempCubes.append(newCube)
+            
+            if not (rightHand and leftHand and rightHand.isPinching() and leftHand.isPinching()):
+                self.cubes += self.tempCubes
+                self.tempCubes = []
+
+                self.extendAxis = None
+                self.extendDir = None
+                self.baseExtendPos = None
+
+                self.state = "PLACED"
+
+        if rightHand and rightHand.isFingerUp(INDEX) and not rightHand.isFingerUp(THUMB) and not rightHand.isFingerUp(MIDDLE) and not rightHand.isFingerUp(RING) and not rightHand.isFingerUp(PINKY) and not rightHand.isPinching() and self.state == "PLACED":
             cx, cy = rightHand.center()
 
             if self.prevHandPos:
