@@ -4,6 +4,7 @@ import json
 import math
 from HandTracker import INDEX, GestureTracker
 from tkinter import Tk, filedialog
+from cubeeditor import CubeEditor
 
 class Shapes3D:
     def __init__(self, screenW, screenH):
@@ -24,6 +25,7 @@ class Shapes3D:
         self.prevHandPos = None
         self.prevDist = None
         self.currentSubOption = -1
+        self.cubeeditor = CubeEditor(screenW, screenH)
 
     def loadModel(self, filepath):
         with open(filepath, 'r') as f:
@@ -143,16 +145,9 @@ class Shapes3D:
             self.currentSubOption = currentSubOption
 
         if currentSubOption == 0 and not self.vertices:
-            self.vertices = [
-                (-1,-1,-1),(1,-1,-1),(-1,1,-1),(1,1,-1),
-                (-1,-1,1),(1,-1,1),(-1,1,1),(1,1,1)
-            ]
-            self.edges = [
-                (0,1),(1,3),(3,2),(2,0),
-                (4,5),(5,7),(7,6),(6,4),
-                (0,4),(1,5),(2,6),(3,7)
-            ]
-
+            img = self.cubeeditor.update(img, rightHand, leftHand)
+            return img
+        
         if currentSubOption == 1 and not self.vertices:
             self.vertices = []
             self.edges = []
