@@ -159,14 +159,14 @@ while True:
 
     if rightHand:
         swipe = gestureTrackerR.detectSwipe(img.shape)
-        if swipe == "LEFT" and leftHand and leftHand.isFingerUp(INDEX) and leftHand.isFingerUp(MIDDLE):
+        if swipe == "LEFT" and leftHand and leftHand.isFingerUp(INDEX) and leftHand.isFingerUp(MIDDLE) and sum(leftHand.fingersUp()) == 2:
             panelOpen = True
-        if swipe == "RIGHT" and leftHand and leftHand.isFingerUp(INDEX) and leftHand.isFingerUp(MIDDLE):
+        if swipe == "RIGHT" and leftHand and leftHand.isFingerUp(INDEX) and leftHand.isFingerUp(MIDDLE) and sum(leftHand.fingersUp()) == 2:
             panelOpen = False
-        if swipe == "DOWN":
+        if swipe == "DOWN" :
             if subPanelImgs[currentMode]:
                 subPanelOpen = True
-        if swipe == "UP":
+        if swipe == "UP" :
             subPanelOpen = False
     else:
         gestureTrackerR.update(None)
@@ -186,6 +186,7 @@ while True:
                     result = hoverTracker.detectHover(rightHand)
                     if result:
                         currentMode = i
+                        currentSubOption = 0
                         panelOpen = False
                         notification = f"Selected: {modes[i]}"
                         notificationTimer = time.time()

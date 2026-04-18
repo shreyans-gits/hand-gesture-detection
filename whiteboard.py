@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 from HandTracker import INDEX, MIDDLE
+import time
 
 class Whiteboard:
     def __init__(self, width, height):
@@ -18,6 +19,11 @@ class Whiteboard:
             4: (0, 0, 0)       # Eraser
         }
         self.drawColor = self.colors[0]
+
+        self.stableThickness = 15
+        self.lastThickness = 15
+        self.thicknessHoldStart = None
+        self.holdDuration = 1
 
     def update(self, img, rightHand, leftHand, currentSubOption):
         self.drawColor = self.colors[currentSubOption]
@@ -47,11 +53,37 @@ class Whiteboard:
             else:
                 self.xp, self.yp = 0, 0
 
+        if(
+            rightHand and leftHand
+            and sum(rightHand.fingersUp()) == 0 and
+            sum(leftHand.fingersUp()) == 5
+        ) :
+            self.imgCanvas[:] = self.drawColor
+
+        if(
+            rightHand and leftHand
+            and sum(rightHand.fingersUp()) == 5 and
+            sum(leftHand.fingersUp()) == 0
+        ) :
+            self.imgCanvas[:] = (0,0,0) 
+
         # Left hand controls brush thickness via pinch
         if leftHand:
             length, p1, p2, mid = leftHand.findDistance(4, 8)
-            self.brushThickness = int(np.interp(length, [20, 150], [5, 40]))
+            rawThickness = int(np.interp(length, [20, 150], [5, 40]))
             
+            # check if thickness is stable within +-10
+            if abs(rawThickness - self.lastThickness) <= 10:
+                if self.thicknessHoldStart is None:
+                    self.thicknessHoldStart = time.time()
+                elif time.time() - self.thicknessHoldStart >= self.holdDuration:
+                    self.stableThickness = rawThickness
+            else:
+                self.lastThickness = rawThickness
+                self.thicknessHoldStart = None
+
+            self.brushThickness = self.stableThickness
+
             # Draw line between thumb and index tip
             cv2.line(img, p1, p2, (255, 255, 255), 2)
             
