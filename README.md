@@ -1,115 +1,156 @@
-# hand-gesture-detection 🖐️
+# 🖐️ Gesture Lab
 
-A collection of hand gesture-controlled applications built using a custom MediaPipe-based hand tracking module. Interact with your computer using nothing but your hands.
-
----
-
-## Core Module — `HandTracker.py`
-
-A clean, reusable hand tracking module built on top of MediaPipe's Hand Landmarker. It abstracts all the complexity of landmark detection into simple, intuitive objects.
-
-### Features
-- Detects up to 2 hands simultaneously
-- Returns `Hand` objects with built-in methods
-- Correct left/right hand detection (with optional mirror flip)
-- Finger state detection (up/down) with proper thumb handling
-- Distance measurement between any two landmarks
-- Skeleton, bounding box, and handedness label drawing
-
-### Usage
-
-```python
-from HandTracker import HandDetector, INDEX, THUMB
-
-cap = cv2.VideoCapture(0)
-detector = HandDetector(maxHands=2)
-
-while True:
-    success, img = cap.read()
-    img = cv2.flip(img, 1)
-    hands, img = detector.findHands(img, flip=True)
-
-    if hands:
-        hand = hands[0]
-        fingers = hand.fingersUp()      # [thumb, index, middle, ring, pinky]
-        print(fingers)
-
-        if hand.isFingerUp(INDEX):
-            print("Index finger is up!")
-
-        length, p1, p2, mid = hand.findDistance(4, 8)  # thumb tip to index tip
-        print(f"Pinch distance: {length}")
-```
-
-### `Hand` Object Methods
-
-| Method | Description |
-|---|---|
-| `fingersUp()` | Returns `[1,0,1,0,0]` style list for all 5 fingers |
-| `isFingerUp(fingerId)` | Returns `True/False` for a single finger |
-| `findDistance(p1, p2)` | Distance in pixels between any two landmarks |
-
-### Landmark Reference
-
-```
-0  - Wrist
-4  - Thumb tip
-8  - Index tip
-12 - Middle tip
-16 - Ring tip
-20 - Pinky tip
-```
+A hand gesture-controlled application built with Python, MediaPipe, and OpenCV. Control a whiteboard, your mouse, and a 3D voxel editor — all with just your hands.
 
 ---
 
-<!-- ## Projects
+## 📦 Requirements
 
-### ✏️ Air Whiteboard
-Draw on screen using your index finger in the air. Switch colors, clear the canvas, all with hand gestures.
-
-### 🖼️ Image Mover
-Open images and drag them around the screen using a pinch gesture. Resize using two hands.
-
-### 🧊 3D Object Interaction *(coming soon)*
-Manipulate 3D wireframe objects in real time using hand movements — rotate, scale, and move with gestures.
-
---- -->
-
-## Requirements
-
-```
-opencv-python
-mediapipe
-```
-
-Install with:
+Install dependencies with:
 
 ```bash
-pip install opencv-python mediapipe
+pip install -r requirements.txt
 ```
 
-You also need the MediaPipe hand landmark model:
+You also need the MediaPipe hand landmarker model file:
 - Download `hand_landmarker.task` from the [MediaPipe Models page](https://developers.google.com/mediapipe/solutions/vision/hand_landmarker)
-- Place it in the same directory as `HandTracker.py`
+- Place it in the root project directory alongside `app.py`
 
 ---
 
-<!-- ## Structure
+## 🚀 Running the App
+
+```bash
+python app.py
+```
+
+Press `Q` to quit.
+
+---
+
+## 🗂️ Project Structure
 
 ```
 gesture-lab/
 │
-├── HandTracker.py           # Core hand tracking module
-├── hand_landmarker.task     # MediaPipe model file
+├── app.py              # Main application loop
+├── HandTracker.py      # Hand detection, landmark tracking, gesture recognition
+├── whiteboard.py       # Whiteboard mode
+├── airmouse.py         # Air Mouse mode
+├── shapes3d.py         # 3D Shapes mode (sphere, model import)
+├── cubeeditor.py       # Voxel cube editor (3D Shapes → Cube sub-option)
+├── hand_landmarker.task
 │
-├── air-whiteboard/
-│   └── whiteboard.py
-│
-├── image-mover/
-│   └── mover.py
-│
-└── 3d-object/
-    └── object.py
+└── GUI/
+    ├── open_sans.ttf
+    ├── panel0.png
+    ├── panel1.png
+    ├── panel2.png
+    ├── Wpanel0-4.png   # Whiteboard sub-option panels
+    └── Dpanel0-2.png   # 3D Shapes sub-option panels
 ```
 
---- -->
+---
+
+## 🧭 Navigation
+
+### Opening the Side Panel (Mode Selector)
+| Gesture | Action |
+|---|---|
+| Right hand swipe LEFT + left hand index & middle up | Open side panel |
+| Right hand swipe RIGHT + left hand index & middle up | Close side panel |
+| Hover index + middle fingertip midpoint over a button for 2s | Select mode |
+
+### Opening the Sub-Option Panel
+| Gesture | Action |
+|---|---|
+| Right hand swipe DOWN | Open sub-option panel |
+| Right hand swipe UP | Close sub-option panel |
+| Hover index + middle fingertip midpoint over a button for 2s | Select sub-option |
+
+---
+
+## ✏️ Mode 1 — Whiteboard
+
+Draw on screen using hand gestures. The drawing persists on a canvas overlaid on the camera feed.
+
+### Sub-options
+- **Red, Blue, Yellow, Green** — select brush color
+- **Eraser** — erase parts of the drawing
+
+### Gestures
+| Gesture | Action |
+|---|---|
+| Right hand index finger only | Draw on canvas |
+| Right hand index + middle finger up | Lift pen (move without drawing) |
+| Left hand thumb + index pinch distance | Control brush thickness (stabilizes after ~1 second) |
+| Right hand closed fist + left hand open (all 5 fingers) | Fill entire canvas with selected color / erase all |
+
+---
+
+## 🖱️ Mode 2 — Air Mouse
+
+Control your computer's mouse cursor using hand gestures. Maps your hand position within a control zone to screen coordinates.
+
+### Gestures
+| Gesture | Action |
+|---|---|
+| Index finger only | Move cursor |
+| Pinch (thumb + index) | Left click |
+| Index + middle fingers up | Right click |
+| Index + middle + ring fingers up, move up/down | Scroll |
+
+> The control zone has a 100px margin on all sides of the camera frame.
+
+---
+
+## 🧊 Mode 3 — 3D Shapes
+
+Render and interact with 3D wireframe models.
+
+### Sub-options
+
+#### Cube — Voxel Editor
+Build 3D structures by placing and extending cubes using hand gestures.
+
+| Gesture | Action |
+|---|---|
+| Single hand pinch | Place the first cube at center |
+| Index + middle cursor hover over a cube | Select that cube (green = right hand anchor, orange = left hand anchor) |
+| Both hands pinching, move extender hand away | Extend cubes in that direction |
+| Both hands pinching, move extender hand closer | Remove cubes |
+| Release either pinch | Lock in the extended cubes |
+| Index finger only, move hand | Rotate the entire structure |
+
+> Only X (left/right) and Y (up/down) axis extension is supported.  
+> The hand that selects a cube becomes the anchor. The other hand is the extender.
+
+#### Sphere
+Displays a mathematically generated UV sphere wireframe.
+
+| Gesture | Action |
+|---|---|
+| Index finger only | Rotate sphere |
+| Both hands open, move apart/together | Scale sphere |
+| Both hands open, move together | Translate sphere |
+
+#### Import
+Load a Blockbench `.json` model file and render it as a 3D wireframe.
+
+| Gesture | Action |
+|---|---|
+| (File dialog opens automatically) | Select a `.json` Blockbench model |
+| Index finger only | Rotate model |
+| Both hands open, move apart/together | Scale model |
+| Both hands open, move together | Translate model |
+
+---
+
+## 🛠️ Built With
+
+- [Python 3.10+](https://www.python.org/)
+- [OpenCV](https://opencv.org/)
+- [MediaPipe](https://developers.google.com/mediapipe)
+- [PyAutoGUI](https://pyautogui.readthedocs.io/)
+- [Pillow](https://pillow.readthedocs.io/)
+- [NumPy](https://numpy.org/)
