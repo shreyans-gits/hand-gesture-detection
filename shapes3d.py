@@ -12,9 +12,8 @@ class Shapes3D:
         self.screenH = screenH
 
         self.model = None
-        self.vertices = []   # [(x,y,z), ...]
-        self.edges = []      # [(i,j), ...]
-
+        self.vertices = []
+        self.edges = []
         self.angleX = 0
         self.angleY = 0
         self.scale = 50
@@ -24,10 +23,19 @@ class Shapes3D:
 
         self.prevHandPos = None
         self.prevDist = None
+        self.prevMovePos = None
         self.currentSubOption = -1
         self.cubeeditor = CubeEditor(screenW, screenH)
 
     def loadModel(self, filepath):
+        if filepath.lower().endswith('.json'):
+            self.loadBlockbenchJson(filepath)
+        elif filepath.lower().endswith('.obj'):
+            self.loadObjMesh(filepath)
+            
+        self.centerModel()
+
+    def loadBlockbenchJson(self, filepath):
         with open(filepath, 'r') as f:
             self.model = json.load(f)
 
@@ -38,47 +46,74 @@ class Shapes3D:
             x1, y1, z1 = element["from"]
             x2, y2, z2 = element["to"]
 
-            # 8 corners
             corners = [
                 (x1,y1,z1),(x2,y1,z1),(x1,y2,z1),(x2,y2,z1),
                 (x1,y1,z2),(x2,y1,z2),(x1,y2,z2),(x2,y2,z2)
             ]
 
-            # Apply element rotation if exists
             if "rotation" in element:
                 rot = element["rotation"]
                 angle = math.radians(rot["angle"])
                 axis = rot["axis"]
                 ox, oy, oz = rot["origin"]
-
                 corners = [self.rotatePoint(p, angle, axis, (ox,oy,oz)) for p in corners]
 
             startIndex = len(self.vertices)
             self.vertices.extend(corners)
 
-            # 12 edges of cube
             box_edges = [
                 (0,1),(1,3),(3,2),(2,0),
                 (4,5),(5,7),(7,6),(6,4),
                 (0,4),(1,5),(2,6),(3,7)
             ]
-
             for e in box_edges:
                 self.edges.append((startIndex+e[0], startIndex+e[1]))
 
-        self.centerModel()
+    def loadObjMesh(self, filepath):
+        self.vertices = []
+        self.edges = []
+        unique_edges = set()
+
+        with open(filepath, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                
+                parts = line.split()
+                prefix = parts[0]
+
+                if prefix == 'v':
+                    x, y, z = float(parts[1]), float(parts[2]), float(parts[3])
+                    self.vertices.append((x, y, z))
+                
+                elif prefix == 'f':
+                    indices = []
+                    for part in parts[1:]:
+                        idx = int(part.split('/')[0])
+                        idx = idx - 1 if idx > 0 else len(self.vertices) + idx
+                        indices.append(idx)
+                    
+                    num_v = len(indices)
+                    for i in range(num_v):
+                        v1 = indices[i]
+                        v2 = indices[(i + 1) % num_v]
+                        edge_pair = (min(v1, v2), max(v1, v2))
+                        if edge_pair not in unique_edges:
+                            unique_edges.add(edge_pair)
+                            self.edges.append(edge_pair)
 
     def centerModel(self):
+        if not self.vertices:
+            return
         verts = np.array(self.vertices)
         center = verts.mean(axis=0)
-
         self.vertices = [tuple(v - center) for v in verts]
 
     def rotatePoint(self, point, angle, axis, origin):
         x,y,z = point
         ox,oy,oz = origin
 
-        # translate to origin
         x -= ox; y -= oy; z -= oz
 
         if axis == "x":
@@ -88,7 +123,6 @@ class Shapes3D:
         elif axis == "z":
             x,y = x*np.cos(angle)-y*np.sin(angle), x*np.sin(angle)+y*np.cos(angle)
 
-        # translate back
         return (x+ox, y+oy, z+oz)
 
     def getRotationX(self, angle):
@@ -107,15 +141,9 @@ class Shapes3D:
 
     def project(self, point):
         p = np.array(point)
-
-        # global rotation
         p = self.getRotationY(self.angleY) @ p
         p = self.getRotationX(self.angleX) @ p
-
-        # scale
         p = p * self.scale
-
-        # convert to 2D
         x = int(p[0] + self.centerX)
         y = int(-p[1] + self.centerY)
 
@@ -123,11 +151,11 @@ class Shapes3D:
     
     def openFileDialog(self):
         root = Tk()
-        root.withdraw()  # hides empty tkinter window
+        root.withdraw()
 
         filepath = filedialog.askopenfilename(
-            title="Select Blockbench JSON Model",
-            filetypes=[("JSON files", "*.json")]
+            title="Select 3D Asset File (.json / .obj)",
+            filetypes=[("3D Files", "*.json *.obj"), ("Blockbench JSON", "*.json"), ("Wavefront OBJ", "*.obj")]
         )
 
         root.destroy()
@@ -153,8 +181,8 @@ class Shapes3D:
             self.edges = []
 
             radius = 1
-            stacks = 12   # vertical divisions
-            slices = 24   # horizontal divisions
+            stacks = 12
+            slices = 24
 
             for i in range(stacks + 1):
                 theta = np.pi * i / stacks
@@ -185,7 +213,7 @@ class Shapes3D:
 
             if filepath:
                 self.loadModel(filepath)
-                self.scale = 20   # optional: make visible immediately
+                self.scale = 20
 
         if rightHand and rightHand.isFingerUp(INDEX) and sum(rightHand.fingersUp()) == 1 and not rightHand.isPinching():
             cx, cy = rightHand.center()
@@ -219,7 +247,6 @@ class Shapes3D:
 
             dist = math.hypot(cx2-cx1, cy2-cy1)
 
-            # scaling
             if self.prevDist:
                 self.scale += (dist - self.prevDist) * 0.01
                 self.scale = max(2, min(self.scale, 200))
