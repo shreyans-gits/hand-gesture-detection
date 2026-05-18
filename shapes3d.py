@@ -5,6 +5,8 @@ import math
 from HandTracker import INDEX, GestureTracker
 from tkinter import Tk, filedialog
 from cubeeditor import CubeEditor
+import trimesh
+import fast_simplification
 
 class Shapes3D:
     def __init__(self, screenW, screenH):
@@ -70,38 +72,40 @@ class Shapes3D:
                 self.edges.append((startIndex+e[0], startIndex+e[1]))
 
     def loadObjMesh(self, filepath):
-        self.vertices = []
+        import trimesh
+        import fast_simplification
+
+        # 1. Load the original heavy model using trimesh
+        mesh = trimesh.load(filepath)
+        
+        # 2. Extract raw numpy arrays
+        raw_vertices = np.array(mesh.vertices, dtype=np.float32)
+        raw_faces = np.array(mesh.faces, dtype=np.int32)
+
+        # 3. Use the raw array method to drop complexity by 95% 
+        # This completely avoids the PyVista wrapper requirement!
+        print(f"Original mesh: {len(raw_faces)} faces. Decimating geometry...")
+        simplified_vertices, simplified_faces = fast_simplification.simplify(
+            raw_vertices, 
+            raw_faces, 
+            target_reduction=0.95
+        )
+        print(f"Decimation complete: {len(simplified_faces)} faces remaining.")
+
+        # 4. Map the optimized arrays back into your custom engine formats
+        self.vertices = [tuple(v) for v in simplified_vertices]
         self.edges = []
         unique_edges = set()
 
-        with open(filepath, 'r') as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith('#'):
-                    continue
-                
-                parts = line.split()
-                prefix = parts[0]
-
-                if prefix == 'v':
-                    x, y, z = float(parts[1]), float(parts[2]), float(parts[3])
-                    self.vertices.append((x, y, z))
-                
-                elif prefix == 'f':
-                    indices = []
-                    for part in parts[1:]:
-                        idx = int(part.split('/')[0])
-                        idx = idx - 1 if idx > 0 else len(self.vertices) + idx
-                        indices.append(idx)
-                    
-                    num_v = len(indices)
-                    for i in range(num_v):
-                        v1 = indices[i]
-                        v2 = indices[(i + 1) % num_v]
-                        edge_pair = (min(v1, v2), max(v1, v2))
-                        if edge_pair not in unique_edges:
-                            unique_edges.add(edge_pair)
-                            self.edges.append(edge_pair)
+        for face in simplified_faces:
+            num_v = len(face)
+            for i in range(num_v):
+                v1 = face[i]
+                v2 = face[(i + 1) % num_v]
+                edge_pair = (min(v1, v2), max(v1, v2))
+                if edge_pair not in unique_edges:
+                    unique_edges.add(edge_pair)
+                    self.edges.append(edge_pair)
 
     def centerModel(self):
         if not self.vertices:
