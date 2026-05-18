@@ -75,24 +75,33 @@ class Shapes3D:
         import trimesh
         import fast_simplification
 
-        # 1. Load the original heavy model using trimesh
+        # 1. Load original asset
         mesh = trimesh.load(filepath)
         
-        # 2. Extract raw numpy arrays
         raw_vertices = np.array(mesh.vertices, dtype=np.float32)
         raw_faces = np.array(mesh.faces, dtype=np.int32)
+        
+        total_original_faces = len(raw_faces)
+        print(f"Loaded model containing {total_original_faces} original faces.")
 
-        # 3. Use the raw array method to drop complexity by 95% 
-        # This completely avoids the PyVista wrapper requirement!
-        print(f"Original mesh: {len(raw_faces)} faces. Decimating geometry...")
-        simplified_vertices, simplified_faces = fast_simplification.simplify(
-            raw_vertices, 
-            raw_faces, 
-            target_reduction=0.999
-        )
-        print(f"Decimation complete: {len(simplified_faces)} faces remaining.")
+        TARGET_FACES = 1200 
+        if total_original_faces > TARGET_FACES:
+            target_reduction = 1.0 - (TARGET_FACES / total_original_faces)
+            target_reduction = max(0.0, min(target_reduction, 0.999))
+            print(f"Asset density exceeds CPU safety limit. Dynamically reducing by {target_reduction * 100:.2f}%.")
+            
+            simplified_vertices, simplified_faces = fast_simplification.simplify(
+                raw_vertices, 
+                raw_faces, 
+                target_reduction=target_reduction
+            )
+        else:
+            print("Asset is lightweight. Skipping decimation to retain maximum detail.")
+            simplified_vertices = raw_vertices
+            simplified_faces = raw_faces
 
-        # 4. Map the optimized arrays back into your custom engine formats
+        print(f"Rendering loop active with {len(simplified_faces)} final wireframe faces.")
+
         self.vertices = [tuple(v) for v in simplified_vertices]
         self.edges = []
         unique_edges = set()
