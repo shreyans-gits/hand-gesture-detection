@@ -136,10 +136,11 @@ Displays a mathematically generated UV sphere wireframe.
 
 #### Import
 Load a Blockbench `.json` model file and render it as a 3D wireframe.
+NOW EVEN `.obj ` models can be rendered!
 
 | Gesture | Action |
 |---|---|
-| (File dialog opens automatically) | Select a `.json` Blockbench model |
+| (File dialog opens automatically) | Select a `.json` Blockbench model or `.obj` model |
 | Index finger only | Rotate model |
 | Both hands open, move apart/together | Scale model |
 | Both hands open, move together | Translate model |
