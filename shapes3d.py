@@ -88,7 +88,7 @@ class Shapes3D:
         simplified_vertices, simplified_faces = fast_simplification.simplify(
             raw_vertices, 
             raw_faces, 
-            target_reduction=0.95
+            target_reduction=0.999
         )
         print(f"Decimation complete: {len(simplified_faces)} faces remaining.")
 
